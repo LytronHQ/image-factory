@@ -13,6 +13,7 @@ help:
 test:
 	shellcheck -x scripts/*.sh verify.sh tests/*.sh
 	bash tests/test-policy.sh
+	bash tests/test-build-args.sh
 	bash tests/test-scan.sh
 	bash tests/test-verify-guards.sh
 

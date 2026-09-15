@@ -29,6 +29,9 @@ jobs:
       - name: pinning gate self-test
         run: bash tests/test-policy.sh
 
+      - name: build-arg gate self-test
+        run: bash tests/test-build-args.sh
+
       - name: scan policy self-test
         run: bash tests/test-scan.sh
 

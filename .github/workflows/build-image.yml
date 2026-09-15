@@ -96,7 +96,7 @@ jobs:
       - name: Assert the factory checkout is real
         run: |
           set -euo pipefail
-          for f in scripts/lib.sh scripts/assert-pinned-digests.sh scripts/scan.sh scripts/sbom.sh verify.sh; do
+          for f in scripts/lib.sh scripts/assert-pinned-digests.sh scripts/assert-build-args.sh scripts/scan.sh scripts/sbom.sh verify.sh; do
             test -s ".image-factory/$f" || { echo "::error::missing .image-factory/$f"; exit 71; }
           done
 
@@ -109,23 +109,7 @@ jobs:
       - name: Build args that name images must also be digests
         env:
           BUILD_ARGS: ${{ inputs.build-args }}
-        run: |
-          set -euo pipefail
-          bad=0
-          while IFS= read -r line; do
-            [ -n "$line" ] || continue
-            key=${line%%=*}
-            val=${line#*=}
-            case "$key" in
-              *_IMAGE|*_BASE|BASE|IMAGE)
-                case "$val" in
-                  *@sha256:*) echo "ok   $key" ;;
-                  *) echo "::error::build-arg $key is not a digest reference: $val"; bad=1 ;;
-                esac
-                ;;
-            esac
-          done <<< "$BUILD_ARGS"
-          [ "$bad" -eq 0 ] || exit 1
+        run: bash .image-factory/scripts/assert-build-args.sh
 
   # ------------------------------------------------------------------- build
   build:

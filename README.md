@@ -26,7 +26,7 @@ Each of these is enforced by a job that fails the build, and by a check in
 | Guarantee | How it is enforced |
 |---|---|
 | Every image reference used to build is immutable | `scripts/assert-pinned-digests.sh` rejects any `FROM`, `COPY --from=`, `RUN --mount=from=` or `# syntax=` that is not `@sha256:<64 hex>`, including ones hidden behind an `ARG`, and rejects the all-zero placeholder digest |
-| A build-arg cannot smuggle in a tag | `*_IMAGE` / `*_BASE` build-args are checked for a digest before the build starts |
+| A build-arg cannot smuggle in a tag | `scripts/assert-build-args.sh` requires every `*_IMAGE` / `*_BASE` build-arg to be `<name>@sha256:<64 lowercase hex>`, not the all-zero placeholder, before the build starts |
 | No fixable HIGH or CRITICAL vulnerability at build time | Trivy scans the **pushed** image pulled from the registry; fixable HIGH/CRITICAL fails the build |
 | Unfixable findings are visible, not swallowed | recorded in `unfixable.json` and printed in the job summary |
 | An accepted finding has a reason and an end date | exceptions carry `reason` and `expires`; an expired entry fails the build with exit 73 |
@@ -127,6 +127,7 @@ cd image-factory
 images/base/Dockerfile              Debian slim, patched, non-root, no setuid
 images/python/Dockerfile            python3 on the factory base
 scripts/assert-pinned-digests.sh    the pinning gate
+scripts/assert-build-args.sh        the same rule for image build-args
 scripts/scan.sh                     Trivy plus the exception policy
 scripts/sbom.sh                     Syft, SPDX and CycloneDX
 scripts/pin.sh                      resolve a tag to a digest, in place
