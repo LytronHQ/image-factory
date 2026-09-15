@@ -26,7 +26,7 @@ ID_RE=""
 ISSUER="https://token.actions.githubusercontent.com"
 PROV_ID_RE='^https://github\.com/slsa-framework/slsa-github-generator/'
 PROV_ISSUER="https://token.actions.githubusercontent.com"
-PROV_TYPE="slsaprovenance1"
+PROV_TYPE="slsaprovenance"
 EXPECT_PACKAGES=""
 TOLERANCE_PCT=5
 STRICT=0
@@ -46,7 +46,7 @@ Options:
   --tolerance PCT               allowed drift between attested and live catalogue (default 5)
   --strict                      tolerance 0; attested and live counts must match exactly
   --provenance-identity-regexp RE
-  --provenance-type TYPE        cosign predicate type (default slsaprovenance1)
+  --provenance-type TYPE        cosign predicate type (default slsaprovenance)
   --skip-provenance             record provenance checks as SKIPPED (partial verification)
   --receipt FILE                write a JSON receipt of every check
 USAGE
