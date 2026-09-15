@@ -5,11 +5,11 @@
 # BASE_IMAGE must be a digest. The pipeline may override it with a newly built
 # base digest, and the gate rejects the override if it is not itself a digest.
 
-ARG BASE_IMAGE=ghcr.io/REPLACE_ME/base@sha256:0000000000000000000000000000000000000000000000000000000000000000
+ARG BASE_IMAGE=ghcr.io/lytronhq/base@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 FROM ${BASE_IMAGE}
 
-ARG IMAGE_SOURCE="https://github.com/REPLACE_ME/image-factory"
+ARG IMAGE_SOURCE="https://github.com/lytronhq/image-factory"
 
 USER root
 SHELL ["/bin/sh", "-eux", "-c"]

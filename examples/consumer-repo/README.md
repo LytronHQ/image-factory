@@ -3,7 +3,7 @@
 A minimal repository that builds an application image on the factory base and
 gets the whole supply chain for free.
 
-Copy these three files into your own repository and change `FACTORY_OWNER` to
+Copy these three files into your own repository and change `lytronhq` to
 the owner of the image-factory fork you are consuming.
 
 ```
@@ -33,7 +33,7 @@ it. Any of those failing or not running fails your build.
 ## Moving to a newer base
 
 ```sh
-scripts/pin.sh Dockerfile ghcr.io/FACTORY_OWNER/base:sha-<commit>
+scripts/pin.sh Dockerfile ghcr.io/lytronhq/base:sha-<commit>
 git diff
 ```
 

@@ -9,7 +9,7 @@
 FROM debian:12-slim@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 ARG IMAGE_TITLE="image-factory base"
-ARG IMAGE_SOURCE="https://github.com/REPLACE_ME/image-factory"
+ARG IMAGE_SOURCE="https://github.com/lytronhq/image-factory"
 
 SHELL ["/bin/sh", "-eux", "-c"]
 

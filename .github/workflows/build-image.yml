@@ -62,7 +62,7 @@ on:
 
 # Change this one line in a fork. It is the repository these scripts live in.
 env:
-  FACTORY_REPO: REPLACE_ME/image-factory
+  FACTORY_REPO: lytronhq/image-factory
 
 permissions: {}
 

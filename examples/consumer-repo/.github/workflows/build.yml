@@ -14,7 +14,7 @@ jobs:
       packages: write    # push to ghcr.io/<owner>
       id-token: write    # keyless signing via OIDC
       actions: read      # the SLSA generator reads the workflow run
-    uses: FACTORY_OWNER/image-factory/.github/workflows/build-image.yml@v1
+    uses: lytronhq/image-factory/.github/workflows/build-image.yml@v1
     with:
       image-name: hello-app
       dockerfile: Dockerfile
@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: FACTORY_OWNER/image-factory
+          repository: lytronhq/image-factory
           ref: v1
           persist-credentials: false
       - uses: sigstore/cosign-installer@v3
