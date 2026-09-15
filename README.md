@@ -25,7 +25,7 @@ Each of these is enforced by a job that fails the build, and by a check in
 
 | Guarantee | How it is enforced |
 |---|---|
-| Every image reference used to build is immutable | `scripts/assert-pinned-digests.sh` rejects any `FROM`, `COPY --from=`, `RUN --mount=from=` or `# syntax=` that is not `@sha256:<64 hex>`, including ones hidden behind an `ARG` |
+| Every image reference used to build is immutable | `scripts/assert-pinned-digests.sh` rejects any `FROM`, `COPY --from=`, `RUN --mount=from=` or `# syntax=` that is not `@sha256:<64 hex>`, including ones hidden behind an `ARG`, and rejects the all-zero placeholder digest |
 | A build-arg cannot smuggle in a tag | `*_IMAGE` / `*_BASE` build-args are checked for a digest before the build starts |
 | No fixable HIGH or CRITICAL vulnerability at build time | Trivy scans the **pushed** image pulled from the registry; fixable HIGH/CRITICAL fails the build |
 | Unfixable findings are visible, not swallowed | recorded in `unfixable.json` and printed in the job summary |

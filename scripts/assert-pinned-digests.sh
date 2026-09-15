@@ -8,7 +8,8 @@
 #   # syntax=<ref>          (BuildKit frontend)
 #
 # Accepted as immutable:
-#   anything ending in @sha256:<64 hex>
+#   anything ending in @sha256:<64 hex>, except the all-zero digest, which is
+#   the placeholder these Dockerfiles ship with and names no real image
 #   scratch
 #   a stage name declared earlier in the same file (FROM x AS name)
 #   a stage index used by COPY --from=0
@@ -34,6 +35,7 @@ if [ "${BASH_VERSINFO[0]}" -lt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${
 fi
 
 DIGEST_SUFFIX='@sha256:[0-9a-f]{64}$'
+ZERO_DIGEST_SUFFIX='@sha256:0{64}$'
 
 VIOLATIONS=0
 REFS_CHECKED=0
@@ -120,6 +122,10 @@ check_ref() {
     report_ok "$where" "stage index $ref"
     return 0
   fi
+  if [[ $ref =~ $ZERO_DIGEST_SUFFIX ]]; then
+    report_violation "$where" "all-zero placeholder digest '$ref' (resolve it with 'make pin')"
+    return 1
+  fi
   if [[ $ref =~ $DIGEST_SUFFIX ]]; then
     report_ok "$where" "$ref"
     return 0
@@ -144,7 +150,9 @@ check_file() {
     if [[ $lline =~ ^[[:space:]]*#[[:space:]]*syntax[[:space:]]*= ]]; then
       sref=$(trim "${lline#*=}")
       REFS_CHECKED=$((REFS_CHECKED + 1))
-      if [[ $sref =~ $DIGEST_SUFFIX ]]; then
+      if [[ $sref =~ $ZERO_DIGEST_SUFFIX ]]; then
+        report_violation "$f:$n (syntax)" "all-zero placeholder digest '$sref' (resolve it with 'make pin')"
+      elif [[ $sref =~ $DIGEST_SUFFIX ]]; then
         report_ok "$f:$n (syntax)" "$sref"
       else
         report_violation "$f:$n (syntax)" "mutable BuildKit frontend '$sref'"

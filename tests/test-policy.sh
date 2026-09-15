@@ -33,6 +33,12 @@ expect 1  "COPY --from with a tag"                      "$FIX/bad/Dockerfile.cop
 expect 1  "RUN --mount=from with a tag"                 "$FIX/bad/Dockerfile.mount-from-tag"
 expect 1  "unresolvable ARG in FROM"                    "$FIX/bad/Dockerfile.unresolvable"
 expect 1  "unpinned BuildKit syntax directive"          "$FIX/bad/Dockerfile.mutable-syntax"
+
+# The all-zero digest is the shipped placeholder. It is well formed, so it must
+# be rejected by value, wherever it appears.
+expect 1  "all-zero placeholder digest in FROM"         "$FIX/bad/Dockerfile.zero-digest"
+expect 1  "all-zero placeholder digest behind an ARG"   "$FIX/bad/Dockerfile.zero-digest-arg"
+expect 1  "all-zero placeholder syntax directive"       "$FIX/bad/Dockerfile.zero-digest-syntax"
 expect 71 "file with no FROM at all"                    "$FIX/bad/Dockerfile.no-from"
 expect 71 "missing file"                                "$FIX/bad/does-not-exist"
 
@@ -54,5 +60,5 @@ fi
 echo ""
 echo "policy gate self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1
-[ "$PASS" -eq 10 ] || { echo "expected 10 cases, ran $PASS" >&2; exit 71; }
+[ "$PASS" -eq 13 ] || { echo "expected 13 cases, ran $PASS" >&2; exit 71; }
 echo "OK"
