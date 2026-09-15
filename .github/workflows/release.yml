@@ -10,6 +10,9 @@ on:
       - "images/**"
       - "scripts/**"
       - "verify.sh"
+      # An exception changes what the scan gate accepts, so it gets a build
+      # that proves the images pass under it, not one a week later.
+      - ".github/image-factory/exceptions.json"
       - ".github/workflows/build-image.yml"
       - ".github/workflows/release.yml"
   schedule:
@@ -19,6 +22,15 @@ on:
   workflow_dispatch:
 
 permissions: {}
+
+# One release at a time. A trigger that arrives while a release runs (a push
+# during the weekly rebuild) waits rather than racing it to push, sign and
+# attest. Nothing is cancelled mid-run, which would leave a pushed image with
+# half its attestations. GitHub keeps one pending run per group, so if several
+# triggers arrive meanwhile, only the newest waits.
+concurrency:
+  group: release-images
+  cancel-in-progress: false
 
 jobs:
   base:
