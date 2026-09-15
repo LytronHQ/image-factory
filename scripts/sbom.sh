@@ -50,8 +50,11 @@ for f in "$OUT/sbom.spdx.json" "$OUT/sbom.cdx.json"; do
   jq -e . "$f" >/dev/null 2>&1 || die "$EX_INCOMPLETE" "$f is not valid JSON"
 done
 
-SPDX_N=$(jq '[ (.packages // [])[] | select(.SPDXID != "SPDXRef-DOCUMENT") ] | length' "$OUT/sbom.spdx.json")
-CDX_N=$(jq '(.components // []) | length' "$OUT/sbom.cdx.json")
+# Count packages only. Syft puts the scanned image itself in SPDX packages
+# (SPDXRef-DocumentRoot-*) and puts every catalogued file plus the OS entry in
+# CycloneDX components; neither is a package. Keep in step with verify.sh.
+SPDX_N=$(jq '[ (.packages // [])[] | select(.SPDXID != "SPDXRef-DOCUMENT") | select(.SPDXID | startswith("SPDXRef-DocumentRoot-") | not) ] | length' "$OUT/sbom.spdx.json")
+CDX_N=$(jq '[ (.components // [])[] | select(.type != "file" and .type != "operating-system") ] | length' "$OUT/sbom.cdx.json")
 
 require_nonempty "$SPDX_N" "packages in the SPDX document"
 require_nonempty "$CDX_N"  "components in the CycloneDX document"

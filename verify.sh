@@ -221,7 +221,7 @@ subject_matches() { # <statement file>
 SPDX_N=""
 if verify_attestation spdxjson "$ID_RE" "$ISSUER" spdx; then
   if subject_matches "$WORK/spdx.stmt.json"; then
-    SPDX_N=$(jq '[ (.predicate.packages // [])[] | select(.SPDXID != "SPDXRef-DOCUMENT") ] | length' "$WORK/spdx.stmt.json")
+    SPDX_N=$(jq '[ (.predicate.packages // [])[] | select(.SPDXID != "SPDXRef-DOCUMENT") | select(.SPDXID | startswith("SPDXRef-DocumentRoot-") | not) ] | length' "$WORK/spdx.stmt.json")
     record attestation_spdx PASS "signed SPDX attestation, subject matches digest"
   else
     record attestation_spdx FAIL "SPDX attestation subject does not contain $DIGEST"
@@ -234,7 +234,7 @@ fi
 CDX_N=""
 if verify_attestation cyclonedx "$ID_RE" "$ISSUER" cdx; then
   if subject_matches "$WORK/cdx.stmt.json"; then
-    CDX_N=$(jq '(.predicate.components // []) | length' "$WORK/cdx.stmt.json")
+    CDX_N=$(jq '[ (.predicate.components // [])[] | select(.type != "file" and .type != "operating-system") ] | length' "$WORK/cdx.stmt.json")
     record attestation_cyclonedx PASS "signed CycloneDX attestation, subject matches digest"
   else
     record attestation_cyclonedx FAIL "CycloneDX attestation subject does not contain $DIGEST"
@@ -263,7 +263,7 @@ fi
 
 # ----------------------------------------- 8 attested SBOM vs live catalogue
 if [ -s "$WORK/live.spdx.json" ] && [ -n "$SPDX_N" ]; then
-  LIVE_N=$(jq '[ (.packages // [])[] | select(.SPDXID != "SPDXRef-DOCUMENT") ] | length' "$WORK/live.spdx.json")
+  LIVE_N=$(jq '[ (.packages // [])[] | select(.SPDXID != "SPDXRef-DOCUMENT") | select(.SPDXID | startswith("SPDXRef-DocumentRoot-") | not) ] | length' "$WORK/live.spdx.json")
   if [ "$LIVE_N" -eq 0 ]; then
     record sbom_matches_live_catalogue FAIL "live catalogue of the registry image is empty"
   else
