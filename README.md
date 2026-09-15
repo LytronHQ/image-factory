@@ -52,6 +52,12 @@ no claim.
   HIGH/CRITICAL was known to Trivy's database when the image was built. Images
   rot. The weekly rebuild exists for this reason, and it is not a substitute
   for you scanning what you actually run.
+- **The weekly rebuild can stop on its own.** GitHub disables scheduled
+  workflows in a public repository after 60 days without repository activity.
+  This repository does not try to game that rule. CI fails on every push and
+  pull request while `release images` is disabled, but in a repository nobody
+  pushes to, nothing announces it: check the date of the latest
+  `release images` run.
 - **The SBOM is as complete as Syft.** Anything Syft has no cataloguer for —
   vendored source, a binary copied in by hand, something installed by a script
   — will not appear. An absent package is not evidence of absence.
@@ -132,7 +138,7 @@ cd image-factory
 ```
 .github/workflows/build-image.yml   the reusable pipeline (workflow_call)
 .github/workflows/release.yml       builds base, then runtime on its digest
-.github/workflows/ci.yml            shellcheck and the self-tests
+.github/workflows/ci.yml            shellcheck, the self-tests, and that the weekly rebuild is enabled
 .github/image-factory/exceptions.json
 images/base/Dockerfile              Debian slim, patched, non-root, no setuid
 images/python/Dockerfile            python3 on the factory base

@@ -63,3 +63,25 @@ jobs:
           done < <(jq -r '.exceptions[]? | [.id, (.expires // ""), (.reason // "")] | @tsv' "$f")
           [ "$expired" -eq 0 ] || exit 73
           echo "exceptions: $(jq '.exceptions | length' "$f")"
+
+  # GitHub disables scheduled workflows in a public repository after 60 days
+  # without repository activity. Nothing runs to report that, so every push and
+  # pull request checks it instead.
+  schedule:
+    name: weekly rebuild is still enabled
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: release images must be active
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          state=$(gh api "repos/$REPO/actions/workflows/release.yml" --jq .state)
+          case "$state" in
+            active) echo "release images: $state" ;;
+            "") echo "::error::could not read the state of release.yml"; exit 72 ;;
+            *) echo "::error::release.yml is '$state': the weekly rebuild is not running, so published images are not being rebuilt or rescanned. Re-enable it under Actions > release images."; exit 1 ;;
+          esac
