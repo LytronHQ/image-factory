@@ -81,12 +81,12 @@ jobs:
             REPLACE_ME/*) echo "::error::env.FACTORY_REPO in build-image.yml is still the placeholder. Set it to your fork."; exit 64 ;;
           esac
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Check out image-factory at the exact commit of this workflow
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.FACTORY_REPO }}
           ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || job.workflow_sha }}
@@ -140,7 +140,7 @@ jobs:
       digest: ${{ steps.push.outputs.digest }}
       ref: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -199,11 +199,11 @@ jobs:
     env:
       REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.FACTORY_REPO }}
           ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || job.workflow_sha }}
@@ -296,7 +296,7 @@ jobs:
     env:
       REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.FACTORY_REPO }}
           ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || job.workflow_sha }}
