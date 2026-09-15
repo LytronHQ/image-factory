@@ -33,7 +33,9 @@ begin_audit "pin"
 ZERO_DIGEST="sha256:0000000000000000000000000000000000000000000000000000000000000000"
 USAGE="usage: pin.sh <Dockerfile> [image-ref-to-resolve]"
 
-[ "$#" -ge 1 ] && [ "$#" -le 2 ] || die "$EX_USAGE" "$USAGE"
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  die "$EX_USAGE" "$USAGE"
+fi
 FILE=$1
 ONLY=${2:-}
 [ -n "$FILE" ] || die "$EX_USAGE" "$USAGE"
