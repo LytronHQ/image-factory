@@ -77,6 +77,10 @@ no claim.
   so that this repository actually runs when you clone it. Dependabot watches
   them. If your threat model requires SHA pinning, do it before first use — it
   is a real gap and it is listed here rather than in a footnote.
+  The one exception is `aquasecurity/setup-trivy`, pinned to a commit SHA:
+  all of its tags were hijacked in March 2026
+  ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)),
+  which is what the gap above looks like when it is exploited.
 
 ---
 
