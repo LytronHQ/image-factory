@@ -71,7 +71,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 COMPLETE=0
-# shellcheck disable=SC2317  # invoked via trap
+# shellcheck disable=SC2317,SC2329  # invoked via trap
 on_exit() {
   rc=$?
   [ -n "${CLEANUP_DIR:-}" ] && rm -rf "$CLEANUP_DIR"
