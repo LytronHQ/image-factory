@@ -94,16 +94,21 @@ cd image-factory
 ```
 
 1. **One line to change.** In `.github/workflows/build-image.yml`, set
-   `env.FACTORY_REPO` to your fork, e.g. `you/image-factory`. The pipeline
-   refuses to run while it is the placeholder.
-2. **Pin the bases.** The Dockerfiles ship with obviously-fake all-zero
-   digests. Resolve them:
+   `env.FACTORY_REPO` to your fork, e.g. `you/image-factory`. It ships set to
+   `lytronhq/image-factory`.
+2. **Pin the bases.** `make pin` resolves every reference in the Dockerfiles
+   that has no digest or still carries the all-zero placeholder, and leaves
+   real digests alone. It needs `crane` or `docker`. The pinning gate rejects
+   anything it left unresolved.
    ```sh
    make pin
    git diff            # read it
    git commit -am "pin base digests"
    ```
-   Also replace `REPLACE_ME` in the `LABEL` and `ARG BASE_IMAGE` lines.
+   In a fork, also replace `lytronhq` in the `IMAGE_SOURCE` and
+   `ARG BASE_IMAGE` lines. After your first release, point `ARG BASE_IMAGE` at
+   your own published base, verified first:
+   `scripts/pin.sh images/python/Dockerfile ghcr.io/<you>/base@sha256:<digest>`.
 3. **Confirm the SLSA generator tag.** `build-image.yml` calls
    `slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0`.
    That reference must be a tag, not a SHA, because verification matches on it.
@@ -130,7 +135,7 @@ scripts/assert-pinned-digests.sh    the pinning gate
 scripts/assert-build-args.sh        the same rule for image build-args
 scripts/scan.sh                     Trivy plus the exception policy
 scripts/sbom.sh                     Syft, SPDX and CycloneDX
-scripts/pin.sh                      resolve a tag to a digest, in place
+scripts/pin.sh                      resolve tags and placeholders to digests, in place
 scripts/lib.sh                      the exit-code contract
 verify.sh                           external verification, also used by CI
 tests/                              proof that the gates reject bad input

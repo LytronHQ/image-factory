@@ -2,9 +2,10 @@
 #
 # A consumer application image built on the factory base.
 #
-# The base is referenced by digest. To move to a newer base, run
-# 'pin.sh Dockerfile ghcr.io/lytronhq/base:sha-<commit>' and commit the
-# result. There is no floating tag to drift underneath you.
+# The base is referenced by digest. To move to a newer base, verify the new
+# digest with the factory's verify.sh, then run the factory's
+# 'scripts/pin.sh Dockerfile ghcr.io/lytronhq/base@sha256:<digest>' and commit
+# the result (see README.md). There is no floating tag to drift underneath you.
 
 FROM ghcr.io/lytronhq/base@sha256:63f0e734e7391733bc8aa11bc7d7e6fb42de3613716870ebfa499f8995b736a4
 

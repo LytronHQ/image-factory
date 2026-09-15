@@ -32,6 +32,9 @@ jobs:
       - name: build-arg gate self-test
         run: bash tests/test-build-args.sh
 
+      - name: pin.sh self-test
+        run: bash tests/test-pin.sh
+
       - name: scan policy self-test
         run: bash tests/test-scan.sh
 

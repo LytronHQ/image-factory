@@ -32,12 +32,22 @@ it. Any of those failing or not running fails your build.
 
 ## Moving to a newer base
 
+`pin.sh` and `verify.sh` live in the factory repository, not in yours. Take
+the new base digest from the factory's release job summary, verify it, then
+pin it:
+
 ```sh
-scripts/pin.sh Dockerfile ghcr.io/lytronhq/base:sha-<commit>
+git clone --depth 1 --branch v1 https://github.com/LytronHQ/image-factory /tmp/image-factory
+/tmp/image-factory/verify.sh --image ghcr.io/lytronhq/base@sha256:<digest> \
+  --repo LytronHQ/image-factory --strict
+/tmp/image-factory/scripts/pin.sh Dockerfile ghcr.io/lytronhq/base@sha256:<digest>
 git diff
 ```
 
-Commit the diff. Nothing updates itself underneath you.
+`pin.sh` rewrites every reference to `ghcr.io/lytronhq/base` in the file,
+including one that is already pinned, and writes nothing if the digest does
+not resolve. It needs `crane` or `docker`. Commit the diff. Nothing updates
+itself underneath you.
 
 ## The second job
 

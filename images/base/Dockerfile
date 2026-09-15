@@ -3,8 +3,10 @@
 # Base image. Debian slim, patched, with a non-root user and no package
 # manager state left behind.
 #
-# The digests below are placeholders. Run 'make pin' once after cloning, read
-# the diff, and commit it. The pipeline refuses to build until they are real.
+# The digests below were resolved with 'make pin' and committed after review.
+# To move to a newer Debian, run 'scripts/pin.sh images/base/Dockerfile
+# debian:12-slim', read the diff, and commit it. The pinning gate rejects a
+# tag or the all-zero placeholder digest.
 
 FROM debian:12-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 
