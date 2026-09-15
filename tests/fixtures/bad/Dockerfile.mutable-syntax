@@ -1,0 +1,2 @@
+# syntax=docker/dockerfile:1
+FROM debian@sha256:aaaaaaaabbbbbbbbccccccccdddddddd00000000111111112222222233333333

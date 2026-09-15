@@ -1,0 +1,73 @@
+name: release images
+
+# Builds the base image, then builds the language runtime on the digest that
+# base build just produced. The runtime never consumes a tag of the base.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "images/**"
+      - "scripts/**"
+      - "verify.sh"
+      - ".github/workflows/build-image.yml"
+      - ".github/workflows/release.yml"
+  schedule:
+    # Weekly rebuild. Nothing about an image gets safer by sitting still: the
+    # vulnerability database moves even when the Dockerfile does not.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  base:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/build-image.yml
+    with:
+      image-name: base
+      dockerfile: images/base/Dockerfile
+      context: .
+      min-packages: 50
+
+  runtime:
+    needs: base
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/build-image.yml
+    with:
+      image-name: python
+      dockerfile: images/python/Dockerfile
+      context: .
+      min-packages: 60
+      build-args: |
+        BASE_IMAGE=${{ needs.base.outputs.image }}@${{ needs.base.outputs.digest }}
+
+  published:
+    needs: [base, runtime]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record what was published
+        run: |
+          set -euo pipefail
+          {
+            echo "### Published"
+            echo ""
+            echo '```'
+            echo "${{ needs.base.outputs.image }}@${{ needs.base.outputs.digest }}    packages=${{ needs.base.outputs.packages }}"
+            echo "${{ needs.runtime.outputs.image }}@${{ needs.runtime.outputs.digest }} packages=${{ needs.runtime.outputs.packages }}"
+            echo '```'
+            echo ""
+            echo "Verify either of them yourself:"
+            echo ""
+            echo '```sh'
+            echo "./verify.sh --image ${{ needs.base.outputs.image }}@${{ needs.base.outputs.digest }} --repo ${{ github.repository }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

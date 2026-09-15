@@ -1,0 +1,2 @@
+FROM debian@sha256:aaaaaaaabbbbbbbbccccccccdddddddd00000000111111112222222233333333
+RUN --mount=type=bind,from=busybox:latest,source=/bin,target=/mnt true

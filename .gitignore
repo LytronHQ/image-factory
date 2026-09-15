@@ -1,0 +1,4 @@
+scan/
+sbom/
+receipt.json
+*.bak

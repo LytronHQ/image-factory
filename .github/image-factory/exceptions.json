@@ -1,0 +1,11 @@
+{
+  "$comment": [
+    "Fixable HIGH/CRITICAL findings that are accepted for a stated period.",
+    "Every entry needs id, package, reason, expires and owner.",
+    "An entry past its expiry fails the build. That is the point: the way out",
+    "of an exception is to fix it or re-justify it, never to let it lapse",
+    "quietly. Thresholds are never lowered to make a build green.",
+    "package may be \"*\" to accept the id regardless of which package carries it."
+  ],
+  "exceptions": []
+}

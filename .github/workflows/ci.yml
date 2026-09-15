@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  test:
+    name: shellcheck and policy self-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          shellcheck --version
+          shellcheck -x scripts/*.sh verify.sh tests/*.sh
+
+      # These prove the gates fail when they should. A gate only ever observed
+      # passing is indistinguishable from a gate that cannot fail.
+      - name: pinning gate self-test
+        run: bash tests/test-policy.sh
+
+      - name: scan policy self-test
+        run: bash tests/test-scan.sh
+
+      - name: verify.sh guardrails
+        run: bash tests/test-verify-guards.sh
+
+      - name: our own Dockerfiles are pinned
+        run: bash scripts/assert-pinned-digests.sh
+
+      - name: the exceptions file is well formed and unexpired
+        run: |
+          set -euo pipefail
+          f=.github/image-factory/exceptions.json
+          test -f "$f" || { echo "::error::$f is missing"; exit 71; }
+          jq -e 'type == "object" and (.exceptions | type == "array")' "$f" >/dev/null
+          now=$(date -u +%s)
+          expired=0
+          while IFS=$'\t' read -r id expires reason; do
+            [ -n "$id" ] || continue
+            [ -n "$reason" ] || { echo "::error::exception $id has no reason"; exit 64; }
+            e=$(date -u -d "$expires" +%s) || { echo "::error::exception $id has a bad expiry"; exit 64; }
+            if [ "$e" -lt "$now" ]; then echo "::error::exception $id expired on $expires"; expired=1; fi
+          done < <(jq -r '.exceptions[]? | [.id, (.expires // ""), (.reason // "")] | @tsv' "$f")
+          [ "$expired" -eq 0 ] || exit 73
+          echo "exceptions: $(jq '.exceptions | length' "$f")"

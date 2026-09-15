@@ -1,0 +1,43 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  image:
+    permissions:
+      contents: read     # read this repository
+      packages: write    # push to ghcr.io/<owner>
+      id-token: write    # keyless signing via OIDC
+      actions: read      # the SLSA generator reads the workflow run
+    uses: FACTORY_OWNER/image-factory/.github/workflows/build-image.yml@v1
+    with:
+      image-name: hello-app
+      dockerfile: Dockerfile
+      context: .
+      min-packages: 50
+
+  # Optional: fail your own build if the published image does not verify from
+  # the outside. The factory already does this; doing it again here means you
+  # are not taking the factory's word for it.
+  independent-check:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: FACTORY_OWNER/image-factory
+          ref: v1
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@v3
+      - uses: anchore/sbom-action/download-syft@v0
+      - run: |
+          ./verify.sh \
+            --image "${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}" \
+            --repo "${{ github.repository }}" \
+            --expect-packages "${{ needs.image.outputs.packages }}" \
+            --strict

@@ -1,0 +1,2 @@
+FROM ${UNDECLARED_BASE}
+RUN true

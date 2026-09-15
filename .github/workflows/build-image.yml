@@ -1,0 +1,370 @@
+name: image-factory
+
+# Reusable pipeline. Consumers call it with `uses:`.
+#
+# Order is fixed and each stage gates the next:
+#   policy -> build -> attest(scan, sbom, sign) -> provenance -> verify -> gate
+#
+# The final `gate` job runs with if: always() and fails unless every other job
+# reported success. A job that is skipped, cancelled, or never scheduled is a
+# failure, not an absence.
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Short name, appended to ghcr.io/<owner>/"
+        required: true
+        type: string
+      dockerfile:
+        description: "Path to the Dockerfile in the calling repository"
+        required: true
+        type: string
+      context:
+        description: "Build context"
+        required: false
+        type: string
+        default: "."
+      build-args:
+        description: "Newline-separated KEY=VALUE. Any key ending in _IMAGE must be a digest reference."
+        required: false
+        type: string
+        default: ""
+      registry:
+        required: false
+        type: string
+        default: "ghcr.io"
+      min-packages:
+        description: "Floor for the package count. A scan or SBOM below this is treated as a broken tool, not a clean image."
+        required: false
+        type: number
+        default: 1
+      exceptions-file:
+        description: "Path in the calling repo to dated vulnerability exceptions"
+        required: false
+        type: string
+        default: ".github/image-factory/exceptions.json"
+      factory-ref:
+        description: "Override the image-factory ref to check out. Leave empty to use the exact commit of this workflow."
+        required: false
+        type: string
+        default: ""
+    outputs:
+      image:
+        description: "Image repository without a tag"
+        value: ${{ jobs.build.outputs.image }}
+      digest:
+        description: "Digest of the pushed manifest"
+        value: ${{ jobs.build.outputs.digest }}
+      packages:
+        description: "Package count in the attested SBOM"
+        value: ${{ jobs.attest.outputs.packages }}
+
+# Change this one line in a fork. It is the repository these scripts live in.
+env:
+  FACTORY_REPO: REPLACE_ME/image-factory
+
+permissions: {}
+
+jobs:
+  # ------------------------------------------------------------------ policy
+  policy:
+    name: policy (pinned digests)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Refuse to run unconfigured
+        run: |
+          set -euo pipefail
+          case "${FACTORY_REPO}" in
+            REPLACE_ME/*) echo "::error::env.FACTORY_REPO in build-image.yml is still the placeholder. Set it to your fork."; exit 64 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out image-factory at the exact commit of this workflow
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FACTORY_REPO }}
+          ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || github.job_workflow_sha }}
+          path: .image-factory
+          persist-credentials: false
+
+      - name: Assert the factory checkout is real
+        run: |
+          set -euo pipefail
+          for f in scripts/lib.sh scripts/assert-pinned-digests.sh scripts/scan.sh scripts/sbom.sh verify.sh; do
+            test -s ".image-factory/$f" || { echo "::error::missing .image-factory/$f"; exit 71; }
+          done
+
+      - name: Every FROM must be a digest
+        run: |
+          set -euo pipefail
+          test -f "${{ inputs.dockerfile }}" || { echo "::error::no such Dockerfile: ${{ inputs.dockerfile }}"; exit 71; }
+          bash .image-factory/scripts/assert-pinned-digests.sh "${{ inputs.dockerfile }}"
+
+      - name: Build args that name images must also be digests
+        env:
+          BUILD_ARGS: ${{ inputs.build-args }}
+        run: |
+          set -euo pipefail
+          bad=0
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            key=${line%%=*}
+            val=${line#*=}
+            case "$key" in
+              *_IMAGE|*_BASE|BASE|IMAGE)
+                case "$val" in
+                  *@sha256:*) echo "ok   $key" ;;
+                  *) echo "::error::build-arg $key is not a digest reference: $val"; bad=1 ;;
+                esac
+                ;;
+            esac
+          done <<< "$BUILD_ARGS"
+          [ "$bad" -eq 0 ] || exit 1
+
+  # ------------------------------------------------------------------- build
+  build:
+    name: build and push
+    needs: policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+      ref: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - id: name
+        run: |
+          set -euo pipefail
+          owner=$(printf '%s' "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          name=$(printf '%s' "${{ inputs.image-name }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=${{ inputs.registry }}/${owner}/${name}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No mutable :latest is ever published. The digest is the handle; the
+      # commit-sha tag exists only so a human can find it in the UI.
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          build-args: ${{ inputs.build-args }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.name.outputs.image }}:sha-${{ github.sha }}
+          # BuildKit's own attestations would change the pushed manifest into
+          # an index and move the digest out from under cosign. We attach our
+          # own, signed, instead.
+          provenance: false
+          sbom: false
+
+      - name: Assert we actually got a digest back
+        run: |
+          set -euo pipefail
+          d="${{ steps.push.outputs.digest }}"
+          case "$d" in
+            sha256:????????????????????????????????????????????????????????????????) echo "digest: $d" ;;
+            *) echo "::error::build-push-action returned no usable digest: '$d'"; exit 72 ;;
+          esac
+
+  # ------------------------------------------------- scan, SBOM, sign, attest
+  attest:
+    name: scan, sbom, sign
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      packages: ${{ steps.sbom.outputs.packages }}
+    env:
+      REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FACTORY_REPO }}
+          ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || github.job_workflow_sha }}
+          path: .image-factory
+          persist-credentials: false
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: aquasecurity/setup-trivy@v0.2.0
+      - uses: anchore/sbom-action/download-syft@v0
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Scan the pushed image
+        run: |
+          set -euo pipefail
+          bash .image-factory/scripts/scan.sh \
+            --image "$REF" \
+            --out scan \
+            --min-packages "${{ inputs.min-packages }}" \
+            ${{ inputs.exceptions-file != '' && format('--exceptions {0}', inputs.exceptions-file) || '' }}
+
+      - id: sbom
+        name: SBOM from the pushed image
+        run: |
+          set -euo pipefail
+          bash .image-factory/scripts/sbom.sh \
+            --image "$REF" \
+            --out sbom \
+            --min-packages "${{ inputs.min-packages }}"
+          n=$(jq -r '.packages' sbom/sbom-metadata.json)
+          case "$n" in ''|*[!0-9]*) echo "::error::no package count"; exit 72 ;; esac
+          [ "$n" -gt 0 ] || { echo "::error::package count is zero"; exit 71; }
+          echo "packages=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Sign the image
+        run: cosign sign --yes "$REF"
+
+      - name: Attest the SBOMs
+        run: |
+          set -euo pipefail
+          cosign attest --yes --type spdxjson  --predicate sbom/sbom.spdx.json "$REF"
+          cosign attest --yes --type cyclonedx --predicate sbom/sbom.cdx.json  "$REF"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-factory-${{ inputs.image-name }}-reports
+          path: |
+            scan/
+            sbom/
+          if-no-files-found: error
+
+  # -------------------------------------------------------------- provenance
+  # SLSA provenance is produced by a builder we do not control and cannot
+  # forge from inside this workflow. That separation is the point.
+  #
+  # The tag below is load-bearing: slsa-verifier and the identity regexp in
+  # verify.sh both match on it, so it cannot be a commit SHA. Confirm the tag
+  # exists before first use and bump it deliberately.
+  provenance:
+    name: slsa provenance
+    needs: [build, attest]
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ------------------------------------------------------------------ verify
+  verify:
+    name: verify own output
+    needs: [build, attest, provenance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FACTORY_REPO }}
+          ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || github.job_workflow_sha }}
+          persist-credentials: false
+
+      - uses: anchore/sbom-action/download-syft@v0
+      - uses: sigstore/cosign-installer@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Verification pulls the artefact back out of the registry. Nothing from
+      # the build jobs is trusted here except the digest we are checking.
+      - name: Verify signature, attestations and SBOM
+        run: |
+          set -euo pipefail
+          ./verify.sh \
+            --image "$REF" \
+            --repo "${{ github.repository }}" \
+            --expect-packages "${{ needs.attest.outputs.packages }}" \
+            --strict \
+            --receipt receipt.json
+
+      - name: The receipt must show a complete verification
+        run: |
+          set -euo pipefail
+          test -s receipt.json || { echo "::error::verify.sh produced no receipt"; exit 71; }
+          jq -e '.complete == true'  receipt.json >/dev/null || { echo "::error::receipt is not complete"; jq . receipt.json; exit 74; }
+          jq -e '.ran == .required'  receipt.json >/dev/null || { echo "::error::not every required check ran"; jq . receipt.json; exit 75; }
+          jq -e '.failed == 0'       receipt.json >/dev/null || { echo "::error::failed checks in receipt"; jq . receipt.json; exit 74; }
+          jq -e '.skipped == 0'      receipt.json >/dev/null || { echo "::error::skipped checks in receipt"; jq . receipt.json; exit 74; }
+          jq -e '.ran >= 12'         receipt.json >/dev/null || { echo "::error::fewer checks than expected"; jq . receipt.json; exit 75; }
+          {
+            echo "### Verification"
+            echo ""
+            echo "| check | result |"
+            echo "|---|---|"
+            jq -r '.checks[] | "| \(.name) | \(.result) |"' receipt.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-factory-${{ inputs.image-name }}-receipt
+          path: receipt.json
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------- gate
+  gate:
+    name: gate
+    if: always()
+    needs: [policy, build, attest, provenance, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every stage must have run and succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          expected="policy build attest provenance verify"
+          echo "$RESULTS" | jq -e 'length > 0' >/dev/null || { echo "::error::no job results at all"; exit 71; }
+          missing=""
+          for j in $expected; do
+            echo "$RESULTS" | jq -e --arg j "$j" 'has($j)' >/dev/null || missing="$missing $j"
+          done
+          [ -z "$missing" ] || { echo "::error::stages never reported:$missing"; exit 75; }
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$RESULTS" | jq -r 'to_entries[] | select(.value.result != "success") | .key' | tr '\n' ' ')
+          [ -z "$bad" ] || { echo "::error::stages did not succeed: $bad"; exit 1; }
+          n=$(echo "$RESULTS" | jq 'length')
+          [ "$n" -eq 5 ] || { echo "::error::expected 5 stages, saw $n"; exit 75; }
+          echo "all 5 stages succeeded"

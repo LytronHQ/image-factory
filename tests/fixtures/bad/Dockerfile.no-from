@@ -1,0 +1,1 @@
+RUN echo "this file has no FROM at all"

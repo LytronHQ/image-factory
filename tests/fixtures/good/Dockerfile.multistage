@@ -1,0 +1,7 @@
+# syntax=docker/dockerfile:1.10.0@sha256:865e5dd094beca432e8c0a1d5e1c465db5f998dca4e439981029b3b81fb39ed5
+ARG BASE=debian:12-slim@sha256:aaaaaaaabbbbbbbbccccccccdddddddd00000000111111112222222233333333
+FROM ${BASE} AS build
+RUN echo hi
+FROM ${BASE}
+COPY --from=build /etc/os-release /etc/os-release
+COPY --from=0 /etc/hostname /tmp/h
