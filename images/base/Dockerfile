@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.10.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+# syntax=docker/dockerfile:1.10.0@sha256:865e5dd094beca432e8c0a1d5e1c465db5f998dca4e439981029b3b81fb39ed5
 #
 # Base image. Debian slim, patched, with a non-root user and no package
 # manager state left behind.
@@ -6,7 +6,7 @@
 # The digests below are placeholders. Run 'make pin' once after cloning, read
 # the diff, and commit it. The pipeline refuses to build until they are real.
 
-FROM debian:12-slim@sha256:0000000000000000000000000000000000000000000000000000000000000000
+FROM debian:12-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 
 ARG IMAGE_TITLE="image-factory base"
 ARG IMAGE_SOURCE="https://github.com/lytronhq/image-factory"
