@@ -41,6 +41,9 @@ jobs:
       - name: verify.sh guardrails
         run: bash tests/test-verify-guards.sh
 
+      - name: verify.sh signer binding
+        run: bash tests/test-verify-identity.sh
+
       - name: our own Dockerfiles are pinned
         run: bash scripts/assert-pinned-digests.sh
 

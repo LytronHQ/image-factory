@@ -25,10 +25,15 @@ app.sh
 
 ## What you get
 
-A pushed digest, a keyless Cosign signature bound to your workflow identity,
-SPDX and CycloneDX SBOM attestations, a SLSA provenance attestation, and a
-verification pass that pulled all of it back out of the registry and checked
-it. Any of those failing or not running fails your build.
+A pushed digest, a keyless Cosign signature, SPDX and CycloneDX SBOM
+attestations, a SLSA provenance attestation, and a verification pass that
+pulled all of it back out of the registry and checked it. Any of those failing
+or not running fails your build.
+
+The signing certificate names the factory's `build-image.yml` as the signer,
+and your repository and ref as the run it signed in. Verify with both:
+`--repo <you>/<repo> --factory LytronHQ/image-factory`, plus
+`--source-ref refs/tags/<tag>` if you release from a tag rather than `main`.
 
 ## Moving to a newer base
 

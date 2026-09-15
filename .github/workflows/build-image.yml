@@ -297,12 +297,20 @@ jobs:
 
       # Verification pulls the artefact back out of the registry. Nothing from
       # the build jobs is trusted here except the digest we are checking.
+      # --repo and --source-ref name the run that just signed. --factory is the
+      # repository this workflow file lives in, which the certificate names as
+      # the signer; for a consumer of the factory the two differ.
       - name: Verify signature, attestations and SBOM
+        env:
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           ./verify.sh \
             --image "$REF" \
-            --repo "${{ github.repository }}" \
+            --repo "$SOURCE_REPO" \
+            --factory "$FACTORY_REPO" \
+            --source-ref "$SOURCE_REF" \
             --expect-packages "${{ needs.attest.outputs.packages }}" \
             --strict \
             --receipt receipt.json

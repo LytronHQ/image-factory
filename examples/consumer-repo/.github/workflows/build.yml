@@ -39,5 +39,7 @@ jobs:
           ./verify.sh \
             --image "${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}" \
             --repo "${{ github.repository }}" \
+            --factory LytronHQ/image-factory \
+            --source-ref "${{ github.ref }}" \
             --expect-packages "${{ needs.image.outputs.packages }}" \
             --strict

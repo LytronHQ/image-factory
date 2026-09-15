@@ -22,9 +22,11 @@ EX_INCOMPLETE=75
 
 IMAGE=""
 REPO=""
+FACTORY=""
+SOURCE_REF="refs/heads/main"
 ID_RE=""
 ISSUER="https://token.actions.githubusercontent.com"
-PROV_ID_RE='^https://github\.com/slsa-framework/slsa-github-generator/'
+PROV_ID_RE='^https://github\.com/slsa-framework/slsa-github-generator/\.github/workflows/generator_container_slsa3\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 PROV_ISSUER="https://token.actions.githubusercontent.com"
 PROV_TYPE="slsaprovenance"
 EXPECT_PACKAGES=""
@@ -39,8 +41,15 @@ usage() {
 
 Options:
   --image REF@sha256:...        required, must be a digest reference
-  --repo OWNER/NAME             derive the expected signer identity from a repo
-  --identity-regexp RE          expected signer identity (instead of --repo)
+  --repo OWNER/NAME             the repository whose workflow run built the image;
+                                the signature and every attestation must come from
+                                a run in it (case-insensitive)
+  --factory OWNER/NAME          the repository build-image.yml lives in; the signer
+                                must be its build-image.yml at main, a tag or a
+                                commit SHA (default: --repo)
+  --source-ref REF              the ref that run was on (default refs/heads/main)
+  --identity-regexp RE          expected signer identity, replacing the one derived
+                                from --factory (--repo still binds the run)
   --issuer URL                  OIDC issuer (default GitHub Actions)
   --expect-packages N           assert the attested SBOM lists exactly N packages
   --tolerance PCT               allowed drift between attested and live catalogue (default 5)
@@ -56,6 +65,8 @@ while [ "$#" -gt 0 ]; do
   case $1 in
     --image) IMAGE=$2; shift 2 ;;
     --repo) REPO=$2; shift 2 ;;
+    --factory) FACTORY=$2; shift 2 ;;
+    --source-ref) SOURCE_REF=$2; shift 2 ;;
     --identity-regexp) ID_RE=$2; shift 2 ;;
     --issuer) ISSUER=$2; shift 2 ;;
     --expect-packages) EXPECT_PACKAGES=$2; shift 2 ;;
@@ -102,10 +113,26 @@ case $DIGEST_HEX in
   *) FAIL_CODE=$EX_USAGE fail "digest is not 64 characters: $DIGEST" ;;
 esac
 
+REPO_FORMAT='^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$'
+if [ -n "$REPO" ] && ! [[ $REPO =~ $REPO_FORMAT ]]; then
+  FAIL_CODE=$EX_USAGE fail "--repo must be OWNER/NAME (got '$REPO')"
+fi
+if [ -n "$FACTORY" ] && ! [[ $FACTORY =~ $REPO_FORMAT ]]; then
+  FAIL_CODE=$EX_USAGE fail "--factory must be OWNER/NAME (got '$FACTORY')"
+fi
+case $SOURCE_REF in
+  refs/heads/?*|refs/tags/?*) : ;;
+  *) FAIL_CODE=$EX_USAGE fail "--source-ref must be refs/heads/<branch> or refs/tags/<tag> (got '$SOURCE_REF')" ;;
+esac
+
 if [ -z "$ID_RE" ]; then
   [ -n "$REPO" ] || { FAIL_CODE=$EX_USAGE fail "pass --repo OWNER/NAME or --identity-regexp. Verifying without an expected identity proves only that somebody signed it."; }
-  esc_repo=$(printf '%s' "$REPO" | sed 's/[.[\*^$\/]/\\&/g')
-  ID_RE="^https://github\.com/${esc_repo}/\.github/workflows/.+@refs/.+"
+  # The signer is the reusable workflow itself, at a release point of the
+  # factory: main, a tag, or a full commit SHA. Any other workflow file, or
+  # build-image.yml on any other branch, is not accepted. GitHub owner and
+  # repository names are case-insensitive, so that part of the match is too.
+  esc_factory=$(printf '%s' "${FACTORY:-$REPO}" | sed 's/[.[\*^$\/]/\\&/g')
+  ID_RE="^https://github\.com/(?i:${esc_factory})/\.github/workflows/build-image\.yml@(refs/heads/main|refs/tags/[^/]+|[0-9a-f]{40})\$"
 fi
 
 [ "$STRICT" -eq 1 ] && TOLERANCE_PCT=0
@@ -156,6 +183,7 @@ REQUIRED_N=$(printf '%s\n' "$REQUIRED" | grep -c . || true)
 
 echo "image:    $IMAGE"
 echo "identity: $ID_RE"
+if [ -n "$REPO" ]; then echo "run:      $REPO on $SOURCE_REF"; else echo "run:      not bound (no --repo)"; fi
 echo "issuer:   $ISSUER"
 echo "checks:   $REQUIRED_N required"
 echo ""
@@ -176,14 +204,40 @@ case $ID_RE in
 esac
 
 # ------------------------------------------------------------- 3 signature
+# The certificate subject is the reusable workflow that signed. The run it
+# signed in is recorded separately, as GitHub Workflow Repository and Ref
+# (Fulcio OIDs 1.3.6.1.4.1.57264.1.5 and .6); for a consumer of the factory
+# those name the consumer's repository, not the factory. Both must match. The
+# repository is compared case-insensitively here, and the spelling the
+# certificate uses is then required exactly of every attestation below.
+BIND_ARGS=()
+CANON_REPO=$REPO
 if cosign verify \
       --certificate-oidc-issuer "$ISSUER" \
       --certificate-identity-regexp "$ID_RE" \
       "$IMAGE" > "$WORK/sig.json" 2>"$WORK/sig.err"; then
   signer=$(jq -r '.[0].optional.Subject // .[0].optional.Issuer // "unknown"' "$WORK/sig.json" 2>/dev/null || echo unknown)
-  record signature_valid PASS "keyless signature bound to $signer"
+  if [ -z "$REPO" ]; then
+    record signature_valid PASS "keyless signature bound to $signer (run not bound: no --repo)"
+  else
+    found=$(jq -r --arg r "$REPO" --arg ref "$SOURCE_REF" '
+        first(.[] | (.optional // {})
+              | select(((.githubWorkflowRepository // "") | ascii_downcase) == ($r | ascii_downcase)
+                       and .githubWorkflowRef == $ref)
+              | .githubWorkflowRepository) // empty' "$WORK/sig.json" 2>/dev/null || true)
+    if [ -n "$found" ]; then
+      CANON_REPO=$found
+      record signature_valid PASS "keyless signature bound to $signer, in a run of $CANON_REPO on $SOURCE_REF"
+    else
+      seen=$(jq -r '[.[] | (.optional // {}) | "\(.githubWorkflowRepository // "?") on \(.githubWorkflowRef // "?")"] | unique | join(", ")' "$WORK/sig.json" 2>/dev/null || echo unknown)
+      record signature_valid FAIL "signed by $signer, but not in a run of $REPO on $SOURCE_REF (certificate names: $seen)"
+    fi
+  fi
 else
   record signature_valid FAIL "$(tail -n 3 "$WORK/sig.err" | tr '\n' ' ')"
+fi
+if [ -n "$REPO" ]; then
+  BIND_ARGS=(--certificate-github-workflow-repository "$CANON_REPO" --certificate-github-workflow-ref "$SOURCE_REF")
 fi
 
 # --------------------------------------------------------- attestation helper
@@ -194,6 +248,7 @@ verify_attestation() {
         --type "$_type" \
         --certificate-oidc-issuer "$_iss" \
         --certificate-identity-regexp "$_idre" \
+        ${BIND_ARGS[@]+"${BIND_ARGS[@]}"} \
         "$IMAGE" > "$WORK/$_pfx.dsse" 2>"$WORK/$_pfx.err"; then
     return 1
   fi

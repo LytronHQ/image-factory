@@ -17,6 +17,7 @@ test:
 	bash tests/test-pin.sh
 	bash tests/test-scan.sh
 	bash tests/test-verify-guards.sh
+	bash tests/test-verify-identity.sh
 
 gate:
 	bash scripts/assert-pinned-digests.sh

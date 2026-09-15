@@ -34,7 +34,7 @@ Each of these is enforced by a job that fails the build, and by a check in
 | The SBOM is not empty | package count must exceed the configured floor, and SPDX and CycloneDX must agree |
 | The image and its SBOMs are signed | Cosign keyless via GitHub OIDC; SBOMs as signed in-toto attestations |
 | Provenance comes from a builder this workflow cannot forge | `slsa-framework/slsa-github-generator`, a separate isolated builder |
-| The signature is bound to a specific identity | `verify.sh` refuses to run without an expected signer, and fails a permissive regexp such as `.*` |
+| The signature is bound to a specific identity | the signing certificate must name the factory's `build-image.yml` at `main`, a tag or a commit SHA, and a run in the repository given as `--repo` on `--source-ref` (default `refs/heads/main`); the SBOM and provenance attestations are held to the same repository and ref, and provenance must come from the SLSA generator workflow at a release tag. `verify.sh` refuses to run without an expected signer, and fails a permissive regexp such as `.*` |
 | Every attestation is about *this* digest | subject digests are compared against the digest under test |
 | Verification actually ran | `verify.sh` writes a receipt; the pipeline asserts `ran == required`, `failed == 0`, `skipped == 0`; a final `gate` job with `if: always()` fails when any stage is skipped, cancelled or never scheduled |
 | The gates can fail | `tests/` proves each gate rejects bad input with a specific exit code, not merely a non-zero one |
@@ -65,6 +65,11 @@ no claim.
 - **Signing proves origin, not quality.** A valid signature means this
   workflow in this repository produced this digest. It says nothing about
   whether the image is fit for your purpose.
+- **The run binding relies on deprecated certificate fields.** The repository
+  and ref of the signing run are read from Fulcio's GitHub Workflow Repository
+  and Ref extensions (OIDs 1.3.6.1.4.1.57264.1.5 and .6), which Sigstore marks
+  deprecated in favour of newer ones. If Fulcio stops issuing them,
+  verification fails closed; it does not start accepting unbound signatures.
 - **Rekor is public.** Keyless signing writes your repository name, workflow
   path and image reference to a public transparency log, permanently. Do not
   use this for images whose existence is confidential.
@@ -193,15 +198,25 @@ appears.
 ./verify.sh \
   --image ghcr.io/someone/thing@sha256:… \
   --repo someone/thing \
+  --factory LytronHQ/image-factory \
   --strict
 ```
 
-`--repo` derives the expected signer identity. If you pass
-`--identity-regexp '.*'` instead, verification fails: a signature check that
-accepts any signer proves only that the image was signed by somebody, which is
-not a property worth having.
+`--repo` is the repository whose workflow run built and signed the image.
+`--factory` is the repository whose `build-image.yml` did the signing; leave it
+out when the two are the same, as for this repository's own images. The signer
+must be that `build-image.yml` at `main`, a tag or a commit SHA, in a run of
+`--repo` on `--source-ref` (default `refs/heads/main`; pass `refs/tags/<tag>`
+for an image released from a tag). Owner and repository names match regardless
+of case.
 
-Add `--receipt out.json` for a machine-readable ledger of every check.
+If you pass `--identity-regexp '.*'` instead, verification fails: a signature
+check that accepts any signer proves only that the image was signed by
+somebody, which is not a property worth having.
+
+Add `--expect-packages N` (from the release job summary) to check the attested
+package count too, and `--receipt out.json` for a machine-readable ledger of
+every check.
 
 ## Licence
 
