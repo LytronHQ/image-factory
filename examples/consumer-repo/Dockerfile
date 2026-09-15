@@ -6,7 +6,7 @@
 # 'pin.sh Dockerfile ghcr.io/lytronhq/base:sha-<commit>' and commit the
 # result. There is no floating tag to drift underneath you.
 
-FROM ghcr.io/lytronhq/base@sha256:0000000000000000000000000000000000000000000000000000000000000000
+FROM ghcr.io/lytronhq/base@sha256:63f0e734e7391733bc8aa11bc7d7e6fb42de3613716870ebfa499f8995b736a4
 
 COPY --chown=65532:65532 app.sh /app/app.sh
 
