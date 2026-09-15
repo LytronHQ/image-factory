@@ -254,7 +254,7 @@ jobs:
           cosign attest --yes --type spdxjson  --predicate sbom/sbom.spdx.json "$REF"
           cosign attest --yes --type cyclonedx --predicate sbom/sbom.cdx.json  "$REF"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-factory-${{ inputs.image-name }}-reports
           path: |
@@ -340,7 +340,7 @@ jobs:
             jq -r '.checks[] | "| \(.name) | \(.result) |"' receipt.json
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-factory-${{ inputs.image-name }}-receipt
           path: receipt.json
