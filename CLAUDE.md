@@ -48,13 +48,12 @@ fit (this is not a Cloudflare Workers app and has no UI).
 
 ## Ground rules for this project
 
-These override any instinct to make CI green:
+The global test rules (never weaken a check, never invent a SHA or digest)
+apply. Project specifics:
 
-1. Never weaken a check, threshold, or assertion to make something pass. The
-   options are: fix the input, or record a dated exception in
+1. Instead of weakening a check: fix the input, or record a dated exception in
    `.github/image-factory/exceptions.json` with a real reason and owner.
-2. Never invent a commit SHA, digest, or action version. Resolve it for real
-   (`crane digest`, `gh api`) or stop and say it could not be resolved.
+2. Resolve digests and action versions with `crane digest` or `gh api`.
 3. The exit codes in `scripts/lib.sh` and the README table are a contract. A new
    code must be added in both places, and must not collide with `1` (policy
    failure, and also the shell's generic failure) or a code a tool already
@@ -67,8 +66,7 @@ These override any instinct to make CI green:
 
 ## Proof of work
 
-The global rule "never claim done without proof" applies with no UI, so the
-proof is pasted command output:
+There is no UI, so the proof is pasted command output:
 
 - `make test` (or the individual suites) with its real output;
 - a real `./verify.sh` run against the published digest for anything touching
@@ -79,25 +77,15 @@ proof is pasted command output:
 
 ## GitHub workflow
 
-- For every feature, bug, or problem, create a GitHub issue first.
-- Create a branch and a PR that references the issue. When the work is done,
-  tests pass, and CI is green, merge the PR yourself.
+Issue → branch → PR → merge yourself, and owner tasks (`needs-owner`): see the
+global `~/.claude/CLAUDE.md`.
+
 - CI (`ci.yml`) must be green before merging. Merging to `main` also triggers
   `release.yml` when `images/**`, `scripts/**`, `verify.sh`, or the workflow
   files change — that publishes new, signed image digests, so treat a merge as a
   release.
-- If a task must be done by the owner (a repo or org setting, package
-  visibility, anything needing a force-push), create an issue, assign it to
-  `margani`, and label it `needs-owner`. Do not try to do it yourself.
-
-## Writing owner issues — accuracy rule
-
-- Never invent UI steps for an external service (GitHub, Cloudflare, Stripe,
-  etc.). Before writing step-by-step instructions, read the official current docs
-  for that exact service and base the steps on them.
-- If a step cannot be verified from docs, do not write a confident fake step. Say
-  plainly: "Could not verify this step — please check," and link the docs page.
-- Steps the owner follows must match the real current interface.
+- Owner tasks here: repo or org settings, package visibility, anything needing
+  a force-push.
 
 ## Versioning and releases
 
