@@ -146,7 +146,7 @@ jobs:
       # No mutable :latest is ever published. The digest is the handle; the
       # commit-sha tag exists only so a human can find it in the UI.
       - id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
