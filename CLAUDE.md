@@ -84,8 +84,7 @@ global `~/.claude/CLAUDE.md`.
   `release.yml` when `images/**`, `scripts/**`, `verify.sh`, or the workflow
   files change — that publishes new, signed image digests, so treat a merge as a
   release.
-- Owner tasks here: repo or org settings, package visibility, anything needing
-  a force-push.
+- Owner tasks here: repo or org settings, package visibility.
 
 ## Versioning and releases
 
@@ -97,7 +96,12 @@ global `~/.claude/CLAUDE.md`.
 - The pointer consumers use is the **`v1` git tag**
   (`uses: LytronHQ/image-factory/.github/workflows/build-image.yml@v1`). After a
   change that affects consumers, `v1` has to be moved to the new `main`. That is
-  a force-push, so it is an owner task — raise a `needs-owner` issue.
+  a force-push of a lightweight tag: ask once with AskUserQuestion ("Yes — force-push
+  tag v1 to <sha> in LytronHQ/image-factory" / "No"), then move it yourself and
+  read it back with `git ls-remote origin refs/tags/v1`. No workflow triggers on
+  tags, so moving `v1` does not start a release. (2026-10-09: done this way for
+  #6; it had sat as a `needs-owner` issue because a force-push was assumed to be
+  blocked.)
 - After a release, the digest in `images/python/Dockerfile` (`ARG BASE_IMAGE`)
   and in `examples/consumer-repo/Dockerfile` may need re-pinning to a verified
   base digest.
@@ -116,7 +120,6 @@ global `~/.claude/CLAUDE.md`.
 
 ## Open tasks
 
-- Move the `v1` tag to current `main` — issue #6, `needs-owner`.
 - Five open Dependabot PRs (#1–#5) bumping action versions. Review each against
   the pinning policy; #4 bumps `aquasecurity/setup-trivy` to the v0.3.1 commit
   but leaves the comment above it naming v0.2.6, so that comment needs fixing in
