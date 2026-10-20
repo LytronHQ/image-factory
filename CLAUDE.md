@@ -45,9 +45,6 @@ fit (this is not a Cloudflare Workers app and has no UI).
   `--repo` and `--factory` are matched case-insensitively; `--expect-packages` is
   what makes the twelfth check run.
 - **Local dev:** not applicable — nothing here runs a server or a UI.
-- **Dashboard activity:** run `scripts/activity.mjs` with `--no-cloudflare`.
-  This project has no Workers to measure.
-
 ## Ground rules for this project
 
 The global test rules (never weaken a check, never invent a SHA or digest)
