@@ -116,6 +116,10 @@ global `~/.claude/CLAUDE.md`.
 - New ghcr packages are private until the owner makes them public; external
   verification fails until then (`needs-owner` issue).
 - The `gh` token has no `read:packages` scope, so the packages API cannot show
-  whether a package is public (2026-10-07: HTTP 403). Say it is unchecked
-  rather than guessing.
+  whether a package is public (2026-10-07: HTTP 403). Check it anonymously
+  through the registry instead: take a token from
+  `https://ghcr.io/token?scope=repository:lytronhq/<image>:pull`, then
+  `GET https://ghcr.io/v2/lytronhq/<image>/tags/list` with it. 200 means public;
+  a nonexistent repo gives 404 as a control. (2026-10-20: `base` and `python`
+  are both public.)
 - Never run a release against a registry or repository other than this one.
