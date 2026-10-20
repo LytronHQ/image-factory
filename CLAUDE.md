@@ -45,6 +45,8 @@ fit (this is not a Cloudflare Workers app and has no UI).
   `--repo` and `--factory` are matched case-insensitively; `--expect-packages` is
   what makes the twelfth check run.
 - **Local dev:** not applicable — nothing here runs a server or a UI.
+- **Dashboard activity:** run `scripts/activity.mjs` with `--no-cloudflare`.
+  This project has no Workers to measure.
 
 ## Ground rules for this project
 
@@ -116,11 +118,7 @@ global `~/.claude/CLAUDE.md`.
   anything that should not be public.
 - New ghcr packages are private until the owner makes them public; external
   verification fails until then (`needs-owner` issue).
+- The `gh` token has no `read:packages` scope, so the packages API cannot show
+  whether a package is public (2026-10-07: HTTP 403). Say it is unchecked
+  rather than guessing.
 - Never run a release against a registry or repository other than this one.
-
-## Open tasks
-
-- Five open Dependabot PRs (#1–#5) bumping action versions. Review each against
-  the pinning policy; #4 bumps `aquasecurity/setup-trivy` to the v0.3.1 commit
-  but leaves the comment above it naming v0.2.6, so that comment needs fixing in
-  the same PR.
