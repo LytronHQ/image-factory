@@ -7,7 +7,7 @@
 # 'scripts/pin.sh Dockerfile ghcr.io/lytronhq/base@sha256:<digest>' and commit
 # the result (see README.md). There is no floating tag to drift underneath you.
 
-FROM ghcr.io/lytronhq/base@sha256:63f0e734e7391733bc8aa11bc7d7e6fb42de3613716870ebfa499f8995b736a4
+FROM ghcr.io/lytronhq/base@sha256:87a258218c5104d17500464175c95cf9553686da1cc614d3c142d2a1a08f46e5
 
 COPY --chown=65532:65532 app.sh /app/app.sh
 
