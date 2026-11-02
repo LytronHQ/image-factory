@@ -49,25 +49,30 @@ report_ok() {
   printf 'ok    %-44s %s\n' "$1" "$2"
 }
 
-# Join backslash continuations so that flags split across lines are seen.
-read_logical_lines() {
-  local f=$1 acc="" line
-  while IFS= read -r line || [ -n "$line" ]; do
-    line=${line%$'\r'}
-    if [[ $line =~ \\[[:space:]]*$ ]]; then
-      acc+="${line%%\\*} "
-      continue
-    fi
-    printf '%s\n' "$acc$line"
-    acc=""
-  done < "$f"
-  [ -z "$acc" ] || printf '%s\n' "$acc"
-}
-
 # Parser state. Global on purpose: bash namerefs collide with same-named
 # locals, and a silently-wrong nameref would make this gate pass by accident.
-declare -A ARGMAP=()
+#
+# ARG scope follows BuildKit. An ARG declared before the first FROM is global
+# and is the only kind a FROM line can expand. An ARG declared inside a stage
+# is visible to that stage's instructions only, and a bare `ARG NAME` inside a
+# stage takes the global default. Resolving a FROM from a stage ARG made
+# `FROM debian${PIN}` look pinned while BuildKit built debian:latest (audit
+# 2026-11-02).
+declare -A ARGMAP=()      # what expand_args sees for the reference being checked
+declare -A GLOBALARGS=()
+declare -A STAGEARGS=()
 declare -A STAGEMAP=()
+
+# use_args <global|stage> - point ARGMAP at the scope an instruction can see.
+use_args() {
+  local k
+  ARGMAP=()
+  if [ "$1" = global ]; then
+    for k in "${!GLOBALARGS[@]}"; do ARGMAP[$k]=${GLOBALARGS[$k]}; done
+  else
+    for k in "${!STAGEARGS[@]}"; do ARGMAP[$k]=${STAGEARGS[$k]}; done
+  fi
+}
 
 # expand_args <ref> -> prints the expanded ref; returns 2 if a variable has no
 # ARG default in this file, which is a failure, never a pass.
@@ -104,7 +109,7 @@ check_ref() {
 
   ref=$(expand_args "$raw") || rc=$?
   if [ "$rc" -eq 2 ]; then
-    report_violation "$where" "unresolvable reference '$raw' (no ARG default in this file)"
+    report_violation "$where" "unresolvable reference '$raw' (no ARG default in scope: FROM sees only ARGs before the first FROM)"
     return 1
   fi
 
@@ -139,6 +144,8 @@ check_file() {
   [ -r "$f" ] || die "$EX_NO_INPUT" "cannot read $f"
 
   ARGMAP=()
+  GLOBALARGS=()
+  STAGEARGS=()
   STAGEMAP=()
   local n=0 froms=0
   local lline kw rest tok t sref part
@@ -170,7 +177,13 @@ check_file() {
     case ${kw,,} in
       arg)
         for tok in $rest; do
-          [[ $tok == *=* ]] && ARGMAP[${tok%%=*}]=${tok#*=}
+          if [ "$froms" -eq 0 ]; then
+            [[ $tok == *=* ]] && GLOBALARGS[${tok%%=*}]=${tok#*=}
+          elif [[ $tok == *=* ]]; then
+            STAGEARGS[${tok%%=*}]=${tok#*=}
+          elif [[ -n ${GLOBALARGS[$tok]+set} ]]; then
+            STAGEARGS[$tok]=${GLOBALARGS[$tok]}
+          fi
         done
         ;;
       from)
@@ -187,9 +200,12 @@ check_file() {
         if [ ${#toks[@]} -ge 3 ] && [ "${toks[1],,}" = "as" ]; then
           STAGEMAP[${toks[2],,}]=1
         fi
+        use_args global
         check_ref "$f:$n" "${toks[0]}" || true
+        STAGEARGS=()
         ;;
       copy|run|add)
+        use_args stage
         for t in $rest; do
           case $t in
             --from=*)

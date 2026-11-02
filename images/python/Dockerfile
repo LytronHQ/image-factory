@@ -5,7 +5,7 @@
 # BASE_IMAGE must be a digest. The pipeline may override it with a newly built
 # base digest, and the gate rejects the override if it is not itself a digest.
 
-ARG BASE_IMAGE=ghcr.io/lytronhq/base@sha256:63f0e734e7391733bc8aa11bc7d7e6fb42de3613716870ebfa499f8995b736a4
+ARG BASE_IMAGE=ghcr.io/lytronhq/base@sha256:87a258218c5104d17500464175c95cf9553686da1cc614d3c142d2a1a08f46e5
 
 FROM ${BASE_IMAGE}
 

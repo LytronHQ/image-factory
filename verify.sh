@@ -127,10 +127,14 @@ esac
 
 if [ -z "$ID_RE" ]; then
   [ -n "$REPO" ] || { FAIL_CODE=$EX_USAGE fail "pass --repo OWNER/NAME or --identity-regexp. Verifying without an expected identity proves only that somebody signed it."; }
-  # The signer is the reusable workflow itself, at a release point of the
-  # factory: main, a tag, or a full commit SHA. Any other workflow file, or
-  # build-image.yml on any other branch, is not accepted. GitHub owner and
-  # repository names are case-insensitive, so that part of the match is too.
+  # The signer is the reusable workflow itself, at main, a tag, or a full
+  # commit SHA. Any other workflow file, or build-image.yml at any other
+  # refs/heads/ branch, is not accepted. A commit SHA is NOT checked to be on
+  # main or a tag: this script cannot see the factory's git history, so a SHA
+  # from another branch (or one GitHub resolves through a fork) also matches.
+  # README "What is not guaranteed" lists this; pass --identity-regexp to
+  # accept only the refs you trust. GitHub owner and repository names are
+  # case-insensitive, so that part of the match is too.
   esc_factory=$(printf '%s' "${FACTORY:-$REPO}" | sed 's/[.[\*^$\/]/\\&/g')
   ID_RE="^https://github\.com/(?i:${esc_factory})/\.github/workflows/build-image\.yml@(refs/heads/main|refs/tags/[^/]+|[0-9a-f]{40})\$"
 fi

@@ -26,7 +26,7 @@ on:
         type: string
         default: "."
       build-args:
-        description: "Newline-separated KEY=VALUE. Any key ending in _IMAGE must be a digest reference."
+        description: "Newline-separated KEY=VALUE. Any key ending in _IMAGE or _BASE, and any key naming an ARG the Dockerfile uses in an image reference, must be a digest reference."
         required: false
         type: string
         default: ""
@@ -45,7 +45,7 @@ on:
         type: string
         default: ".github/image-factory/exceptions.json"
       factory-ref:
-        description: "Override the image-factory ref to check out. Leave empty to use the exact commit of this workflow."
+        description: "Leave empty. If set, it must equal the commit of this workflow (job.workflow_sha); anything else fails with 64."
         required: false
         type: string
         default: ""
@@ -74,31 +74,51 @@ jobs:
     permissions:
       contents: read
     steps:
+      # factory-ref used to select any ref for the gate scripts, while the
+      # signing certificate still named build-image.yml at the caller's uses:
+      # ref. A caller could have run older or weaker gates under an identity
+      # verify.sh accepts (audit 2026-11-02). It may now only restate the
+      # workflow's own commit, so the scripts always match the signer.
       - name: Refuse to run unconfigured
+        env:
+          FACTORY_REF: ${{ inputs.factory-ref }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
           case "${FACTORY_REPO}" in
             REPLACE_ME/*) echo "::error::env.FACTORY_REPO in build-image.yml is still the placeholder. Set it to your fork."; exit 64 ;;
           esac
+          case "$WORKFLOW_SHA" in
+            ????????????????????????????????????????) ;;
+            *) echo "::error::job.workflow_sha is not a commit SHA: '$WORKFLOW_SHA'"; exit 72 ;;
+          esac
+          if [ -n "$FACTORY_REF" ] && [ "$FACTORY_REF" != "$WORKFLOW_SHA" ]; then
+            echo "::error::factory-ref '$FACTORY_REF' is not this workflow's commit ($WORKFLOW_SHA). Leave it empty."
+            exit 64
+          fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Check out image-factory at the exact commit of this workflow
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.FACTORY_REPO }}
-          ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || job.workflow_sha }}
+          ref: ${{ job.workflow_sha }}
           path: .image-factory
           persist-credentials: false
 
       - name: Assert the factory checkout is real
+        env:
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
           for f in scripts/lib.sh scripts/assert-pinned-digests.sh scripts/assert-build-args.sh scripts/scan.sh scripts/sbom.sh verify.sh; do
             test -s ".image-factory/$f" || { echo "::error::missing .image-factory/$f"; exit 71; }
           done
+          head=$(git -C .image-factory rev-parse HEAD)
+          [ "$head" = "$WORKFLOW_SHA" ] || { echo "::error::factory checkout is at $head, not this workflow's commit $WORKFLOW_SHA"; exit 74; }
 
       - name: Every FROM must be a digest
         run: |
@@ -106,10 +126,13 @@ jobs:
           test -f "${{ inputs.dockerfile }}" || { echo "::error::no such Dockerfile: ${{ inputs.dockerfile }}"; exit 71; }
           bash .image-factory/scripts/assert-pinned-digests.sh "${{ inputs.dockerfile }}"
 
+      # The Dockerfile is passed so that a build-arg overriding any ARG used in
+      # an image reference is checked, not only keys named *_IMAGE / *_BASE.
       - name: Build args that name images must also be digests
         env:
           BUILD_ARGS: ${{ inputs.build-args }}
-        run: bash .image-factory/scripts/assert-build-args.sh
+          DOCKERFILE: ${{ inputs.dockerfile }}
+        run: bash .image-factory/scripts/assert-build-args.sh "$DOCKERFILE"
 
   # ------------------------------------------------------------------- build
   build:
@@ -124,7 +147,7 @@ jobs:
       digest: ${{ steps.push.outputs.digest }}
       ref: ${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -137,7 +160,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
@@ -146,7 +169,7 @@ jobs:
       # No mutable :latest is ever published. The digest is the handle; the
       # commit-sha tag exists only so a human can find it in the UI.
       - id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
@@ -183,18 +206,18 @@ jobs:
     env:
       REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.FACTORY_REPO }}
-          ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || job.workflow_sha }}
+          ref: ${{ job.workflow_sha }}
           path: .image-factory
           persist-credentials: false
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
@@ -202,8 +225,11 @@ jobs:
 
       # Pinned by commit, not tag. Every setup-trivy tag was hijacked on
       # 2026-03-19 (GHSA-69fq-xp46-6x23) and v0.2.0-v0.2.5 were deleted.
-      # This is the v0.2.6 commit the advisory names as safe.
-      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+      # v0.2.6 was the commit the advisory named as safe; this is v0.3.1, two
+      # commits on from it (script-injection hardening in run blocks, then a fix
+      # for v0.3.0 failing to load). Resolve a new pin with
+      # `gh api repos/aquasecurity/setup-trivy/git/ref/tags/<tag>`.
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
       - uses: anchore/sbom-action/download-syft@v0
       - uses: sigstore/cosign-installer@v3
 
@@ -238,7 +264,7 @@ jobs:
           cosign attest --yes --type spdxjson  --predicate sbom/sbom.spdx.json "$REF"
           cosign attest --yes --type cyclonedx --predicate sbom/sbom.cdx.json  "$REF"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-factory-${{ inputs.image-name }}-reports
           path: |
@@ -280,16 +306,16 @@ jobs:
     env:
       REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.FACTORY_REPO }}
-          ref: ${{ inputs.factory-ref != '' && inputs.factory-ref || job.workflow_sha }}
+          ref: ${{ job.workflow_sha }}
           persist-credentials: false
 
       - uses: anchore/sbom-action/download-syft@v0
       - uses: sigstore/cosign-installer@v3
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
@@ -332,7 +358,7 @@ jobs:
             jq -r '.checks[] | "| \(.name) | \(.result) |"' receipt.json
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-factory-${{ inputs.image-name }}-receipt
           path: receipt.json

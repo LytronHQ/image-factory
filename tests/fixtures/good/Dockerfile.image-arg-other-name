@@ -1,0 +1,6 @@
+# An image ARG whose name does not follow the *_IMAGE / *_BASE convention.
+# Pinned here, so the Dockerfile gate passes; a build-arg overriding SRC must
+# still be held to the digest rule.
+ARG SRC=docker.io/library/debian@sha256:aaaaaaaabbbbbbbbccccccccdddddddd00000000111111112222222233333333
+FROM ${SRC}
+RUN true

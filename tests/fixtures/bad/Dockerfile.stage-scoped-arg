@@ -1,0 +1,7 @@
+# The ARG below is declared inside a stage. BuildKit only expands ARGs declared
+# before the first FROM in a FROM line, so the second FROM builds from
+# docker.io/library/debian (an implicit :latest), not from the digest.
+FROM docker.io/library/debian@sha256:aaaaaaaabbbbbbbbccccccccdddddddd00000000111111112222222233333333 AS one
+ARG PIN=@sha256:aaaaaaaabbbbbbbbccccccccdddddddd00000000111111112222222233333333
+FROM docker.io/library/debian${PIN}
+RUN true

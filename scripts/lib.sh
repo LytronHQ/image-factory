@@ -96,3 +96,60 @@ step_summary() {
   [ -n "${GITHUB_STEP_SUMMARY:-}" ] || return 0
   cat "$1" >> "$GITHUB_STEP_SUMMARY"
 }
+
+# Join backslash continuations so that flags split across lines are seen.
+read_logical_lines() {
+  local f=$1 acc="" line
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%$'\r'}
+    if [[ $line =~ \\[[:space:]]*$ ]]; then
+      acc+="${line%%\\*} "
+      continue
+    fi
+    printf '%s\n' "$acc$line"
+    acc=""
+  done < "$f"
+  [ -z "$acc" ] || printf '%s\n' "$acc"
+}
+
+# dockerfile_image_arg_names <file> - print, one per line, every variable name
+# that appears inside an image reference (FROM, COPY/ADD --from=, RUN
+# --mount=...,from=). A build-arg with one of these names replaces an image
+# reference at build time, whatever the name is.
+dockerfile_image_arg_names() {
+  local f=$1 line kw rest t part
+  local -a toks mparts refs
+  while IFS= read -r line; do
+    [[ $line =~ ^[[:space:]]*# ]] && continue
+    kw=""; rest=""
+    read -r kw rest <<<"$line" || true
+    refs=()
+    case ${kw,,} in
+      from)
+        toks=()
+        for t in $rest; do [[ $t == --* ]] || toks+=("$t"); done
+        [ ${#toks[@]} -eq 0 ] || refs+=("${toks[0]}")
+        ;;
+      copy|run|add)
+        for t in $rest; do
+          case $t in
+            --from=*) refs+=("${t#--from=}") ;;
+            --mount=*)
+              mparts=()
+              IFS=',' read -ra mparts <<<"${t#--mount=}"
+              for part in "${mparts[@]}"; do
+                if [[ $part == from=* ]]; then refs+=("${part#from=}"); fi
+              done
+              ;;
+          esac
+        done
+        ;;
+    esac
+    for t in "${refs[@]}"; do
+      while [[ $t =~ \$\{?([A-Za-z_][A-Za-z0-9_]*) ]]; do
+        printf '%s\n' "${BASH_REMATCH[1]}"
+        t=${t/"${BASH_REMATCH[0]}"/}
+      done
+    done
+  done < <(read_logical_lines "$f")
+}
