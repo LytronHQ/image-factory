@@ -62,6 +62,10 @@ apply. Project specifics:
 5. Every gate needs a test that proves it rejects bad input with an exact exit
    code. A gate only ever seen passing is indistinguishable from one that cannot
    fail.
+6. A gate must model what the tool it guards actually does, not a naming
+   convention. 2026-11-02 (#21): the build-arg gate checked only `*_IMAGE` keys
+   and the digest gate ignored BuildKit's ARG scoping, so `SRC=debian:latest` and
+   a stage-scoped `ARG` in `FROM` both passed. Bind gates to the Dockerfile.
 
 ## Proof of work
 

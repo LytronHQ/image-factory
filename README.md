@@ -25,8 +25,8 @@ Each of these is enforced by a job that fails the build, and by a check in
 
 | Guarantee | How it is enforced |
 |---|---|
-| Every image reference used to build is immutable | `scripts/assert-pinned-digests.sh` rejects any `FROM`, `COPY --from=`, `RUN --mount=from=` or `# syntax=` that is not `@sha256:<64 hex>`, including ones hidden behind an `ARG`, and rejects the all-zero placeholder digest |
-| A build-arg cannot smuggle in a tag | `scripts/assert-build-args.sh` requires every `*_IMAGE` / `*_BASE` build-arg to be `<name>@sha256:<64 lowercase hex>`, not the all-zero placeholder, before the build starts |
+| Every image reference used to build is immutable | `scripts/assert-pinned-digests.sh` rejects any `FROM`, `COPY --from=`, `RUN --mount=from=` or `# syntax=` that is not `@sha256:<64 hex>`, including ones hidden behind an `ARG` (resolved with BuildKit's scoping: a `FROM` sees only `ARG`s declared before the first `FROM`), and rejects the all-zero placeholder digest |
+| A build-arg cannot smuggle in a tag | `scripts/assert-build-args.sh` requires every `*_IMAGE` / `*_BASE` build-arg (any case), and every build-arg that names an `ARG` the Dockerfile uses in an image reference, to be `<name>@sha256:<64 lowercase hex>`, not the all-zero placeholder, before the build starts |
 | No fixable HIGH or CRITICAL vulnerability at build time | Trivy scans the **pushed** image pulled from the registry; fixable HIGH/CRITICAL fails the build |
 | Unfixable findings are visible, not swallowed | recorded in `unfixable.json` and printed in the job summary |
 | An accepted finding has a reason and an end date | exceptions carry `reason` and `expires`; an expired entry fails the build with exit 73 |
@@ -84,6 +84,16 @@ no claim.
   half-done.
 - **Runtime security is out of scope.** No admission control, no policy
   enforcement in your cluster, no seccomp or AppArmor profiles.
+- **A commit-SHA signer is not tied to `main` or a release.** By default
+  `verify.sh` accepts a certificate naming `build-image.yml` at `main`, any
+  tag, or any 40-character commit SHA. It cannot see the factory's history, so
+  it does not check that the SHA is on `main` or behind a tag. A caller that
+  references the workflow by the SHA of an unreviewed branch commit — or of a
+  fork commit, if GitHub resolves it through the fork network — gets a
+  signature that verifies, without the gates of a reviewed release having run.
+  If you only trust releases, pass
+  `--identity-regexp '^https://github\.com/(?i:LytronHQ/image-factory)/\.github/workflows/build-image\.yml@refs/tags/v1$'`
+  (or `refs/heads/main`).
 - **Third-party actions are pinned to floating major tags**, not commit SHAs,
   so that this repository actually runs when you clone it. Dependabot watches
   them. If your threat model requires SHA pinning, do it before first use — it

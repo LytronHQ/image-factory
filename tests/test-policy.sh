@@ -32,6 +32,10 @@ expect 1  "mutable FROM tag"                            "$FIX/bad/Dockerfile.mut
 expect 1  "COPY --from with a tag"                      "$FIX/bad/Dockerfile.copy-from-tag"
 expect 1  "RUN --mount=from with a tag"                 "$FIX/bad/Dockerfile.mount-from-tag"
 expect 1  "unresolvable ARG in FROM"                    "$FIX/bad/Dockerfile.unresolvable"
+# BuildKit expands only ARGs declared before the first FROM in a FROM line. A
+# stage-scoped ARG must not make a later FROM look pinned (audit 2026-11-02).
+expect 1  "stage-scoped ARG used in a later FROM"       "$FIX/bad/Dockerfile.stage-scoped-arg"
+expect 0  "image ARG with a non-conventional name"      "$FIX/good/Dockerfile.image-arg-other-name"
 expect 1  "unpinned BuildKit syntax directive"          "$FIX/bad/Dockerfile.mutable-syntax"
 
 # The all-zero digest is the shipped placeholder. It is well formed, so it must
@@ -60,5 +64,5 @@ fi
 echo ""
 echo "policy gate self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1
-[ "$PASS" -eq 13 ] || { echo "expected 13 cases, ran $PASS" >&2; exit 71; }
+[ "$PASS" -eq 15 ] || { echo "expected 15 cases, ran $PASS" >&2; exit 71; }
 echo "OK"
